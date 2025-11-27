@@ -1,18 +1,96 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { api, type Chat, type Message, type User } from '@/lib/api';
 
 type Section = 'chats' | 'calls' | 'contacts' | 'communities' | 'groups' | 'settings' | 'profile' | 'kelan';
 
+const CURRENT_USER_ID = 1;
+
 const Index = () => {
   const [activeSection, setActiveSection] = useState<Section>('chats');
-  const [selectedChat, setSelectedChat] = useState<number | null>(1);
+  const [selectedChat, setSelectedChat] = useState<number | null>(null);
   const [message, setMessage] = useState('');
   const [kelanListening, setKelanListening] = useState(false);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [contacts, setContacts] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    loadChats();
+    loadUserProfile();
+  }, []);
+
+  useEffect(() => {
+    if (selectedChat) {
+      loadMessages(selectedChat);
+    }
+  }, [selectedChat]);
+
+  const loadChats = async () => {
+    setLoading(true);
+    const data = await api.chats.getChats(CURRENT_USER_ID);
+    setChats(data);
+    setLoading(false);
+  };
+
+  const loadMessages = async (chatId: number) => {
+    const data = await api.chats.getMessages(chatId);
+    setMessages(data);
+  };
+
+  const loadUserProfile = async () => {
+    const data = await api.users.getProfile(CURRENT_USER_ID);
+    setUserProfile(data);
+  };
+
+  const loadContacts = async () => {
+    const data = await api.users.getContacts(CURRENT_USER_ID);
+    setContacts(data);
+  };
+
+  const handleSendMessage = async () => {
+    if (!message.trim() || !selectedChat) return;
+
+    await api.chats.sendMessage(selectedChat, CURRENT_USER_ID, message);
+    setMessage('');
+    loadMessages(selectedChat);
+    loadChats();
+    
+    toast({
+      title: 'Сообщение отправлено',
+      duration: 2000,
+    });
+  };
+
+  const handleCreateChat = async (name: string) => {
+    const chatId = await api.chats.createChat(name, 'direct', CURRENT_USER_ID);
+    loadChats();
+    setSelectedChat(chatId);
+    
+    toast({
+      title: 'Чат создан',
+      duration: 2000,
+    });
+  };
+
+  const handleUpdateProfile = async (updates: Partial<User>) => {
+    await api.users.updateProfile(CURRENT_USER_ID, updates);
+    loadUserProfile();
+    
+    toast({
+      title: 'Профиль обновлён',
+      duration: 2000,
+    });
+  };
 
   const sidebarSections = [
     { id: 'chats' as Section, icon: 'MessageSquare', label: 'Чаты' },
@@ -28,59 +106,75 @@ const Index = () => {
     { id: 'profile' as Section, icon: 'User', label: 'Профиль' },
   ];
 
-  const mockChats = [
-    { id: 1, name: 'Рабочий чат', lastMessage: 'Привет! Как дела?', time: '12:45', unread: 3, avatar: '', online: true },
-    { id: 2, name: 'Команда разработки', lastMessage: 'Новый релиз готов', time: '11:20', unread: 0, avatar: '', online: true },
-    { id: 3, name: 'Проект Alpha', lastMessage: 'Созвон в 15:00', time: 'Вчера', unread: 1, avatar: '', online: false },
-  ];
-
-  const mockMessages = [
-    { id: 1, author: 'Анна Смирнова', text: 'Привет! Как продвигается проект?', time: '12:40', isOwn: false },
-    { id: 2, author: 'Вы', text: 'Всё отлично, уже на финальной стадии', time: '12:42', isOwn: true },
-    { id: 3, author: 'Анна Смирнова', text: 'Отлично! Жду результатов', time: '12:45', isOwn: false },
-  ];
-
-  const renderChatList = () => (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border">
-        <div className="relative">
-          <Icon name="Search" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-          <Input placeholder="Поиск чатов..." className="pl-10 bg-secondary border-0" />
-        </div>
-      </div>
-      <ScrollArea className="flex-1">
-        {mockChats.map((chat) => (
-          <div
-            key={chat.id}
-            onClick={() => setSelectedChat(chat.id)}
-            className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-secondary/50 transition-colors ${
-              selectedChat === chat.id ? 'bg-secondary' : ''
-            }`}
-          >
-            <div className="relative">
-              <Avatar>
-                <AvatarImage src={chat.avatar} />
-                <AvatarFallback className="bg-primary/20 text-primary">{chat.name[0]}</AvatarFallback>
-              </Avatar>
-              {chat.online && (
-                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-medium truncate">{chat.name}</h3>
-                <span className="text-xs text-muted-foreground">{chat.time}</span>
-              </div>
-              <p className="text-sm text-muted-foreground truncate">{chat.lastMessage}</p>
-            </div>
-            {chat.unread > 0 && (
-              <Badge className="bg-primary text-primary-foreground">{chat.unread}</Badge>
-            )}
+  const renderChatList = () => {
+    const selectedChatData = chats.find(c => c.id === selectedChat);
+    
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="relative flex-1">
+            <Icon name="Search" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+            <Input placeholder="Поиск чатов..." className="pl-10 bg-secondary border-0" />
           </div>
-        ))}
-      </ScrollArea>
-    </div>
-  );
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            className="ml-2"
+            onClick={() => {
+              const name = prompt('Название чата:');
+              if (name) handleCreateChat(name);
+            }}
+          >
+            <Icon name="Plus" size={20} />
+          </Button>
+        </div>
+        <ScrollArea className="flex-1">
+          {loading ? (
+            <div className="p-4 text-center text-muted-foreground">Загрузка...</div>
+          ) : chats.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground">
+              <p>Нет чатов</p>
+              <Button variant="link" onClick={() => {
+                const name = prompt('Название чата:');
+                if (name) handleCreateChat(name);
+              }}>
+                Создать первый чат
+              </Button>
+            </div>
+          ) : (
+            chats.map((chat) => (
+              <div
+                key={chat.id}
+                onClick={() => setSelectedChat(chat.id)}
+                className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-secondary/50 transition-colors ${
+                  selectedChat === chat.id ? 'bg-secondary' : ''
+                }`}
+              >
+                <div className="relative">
+                  <Avatar>
+                    <AvatarImage src={chat.avatar_url || ''} />
+                    <AvatarFallback className="bg-primary/20 text-primary">{chat.name[0]}</AvatarFallback>
+                  </Avatar>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-medium truncate">{chat.name}</h3>
+                    <span className="text-xs text-muted-foreground">
+                      {chat.last_message_time ? new Date(chat.last_message_time).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate">{chat.last_message || 'Нет сообщений'}</p>
+                </div>
+                {(chat.unread_count || 0) > 0 && (
+                  <Badge className="bg-primary text-primary-foreground">{chat.unread_count}</Badge>
+                )}
+              </div>
+            ))
+          )}
+        </ScrollArea>
+      </div>
+    );
+  };
 
   const renderChatWindow = () => (
     <div className="flex flex-col h-full">

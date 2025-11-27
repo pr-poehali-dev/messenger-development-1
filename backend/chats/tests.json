@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "name": "Create chat",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "create_chat",
+        "name": "Test Chat",
+        "type": "direct",
+        "user_id": 1
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
