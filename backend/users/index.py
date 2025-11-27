@@ -44,7 +44,33 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             user_id = event.get('queryStringParameters', {}).get('user_id')
             action = event.get('queryStringParameters', {}).get('action', 'get_profile')
             
-            if action == 'get_profile':
+            if action == 'login':
+                phone = event.get('queryStringParameters', {}).get('phone')
+                
+                cursor.execute('''
+                    SELECT id, username, phone, bio, avatar_url, created_at
+                    FROM users
+                    WHERE phone = %s
+                ''', (phone,))
+                
+                user = cursor.fetchone()
+                
+                if user:
+                    return {
+                        'statusCode': 200,
+                        'headers': headers,
+                        'body': json.dumps({'user': dict(user), 'success': True}, default=str),
+                        'isBase64Encoded': False
+                    }
+                else:
+                    return {
+                        'statusCode': 404,
+                        'headers': headers,
+                        'body': json.dumps({'error': 'User not found', 'success': False}),
+                        'isBase64Encoded': False
+                    }
+            
+            elif action == 'get_profile':
                 cursor.execute('''
                     SELECT id, username, phone, bio, avatar_url, created_at
                     FROM users
